@@ -697,7 +697,7 @@ NC_OP nc_rpc_assign_op(nc_rpc* rpc)
 		return (NC_OP_UNKNOWN);
 	}
 
-	if (xmlStrcmp(root->name, BAD_CAST "rpc") != 0) {
+	if (xmlStrcmp(root->name, BAD_CAST "rpc") != 0 && xmlStrcmp(root->name, BAD_CAST "action") != 0) {
 		ERROR("%s: Invalid rpc message - not an <rpc> message.", __func__);
 		return (NC_OP_UNKNOWN);
 	}
