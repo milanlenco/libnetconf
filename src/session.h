@@ -414,6 +414,8 @@ int nc_msgid_compare(const nc_msgid id1, const nc_msgid id2);
  */
 NC_MSG_TYPE nc_session_send_recv(struct nc_session* session, nc_rpc *rpc, nc_reply** reply);
 
+int nc_session_is_ssh_connected(struct nc_session* session);
+
 #ifdef __cplusplus
 }
 #endif

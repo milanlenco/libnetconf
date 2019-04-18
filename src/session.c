@@ -292,6 +292,13 @@ int nc_session_is_monitored(const char* session_id)
 	return 0;
 }
 
+int nc_session_is_ssh_connected(struct nc_session* session)
+{
+    if (session == NULL)
+        return 0;
+    return ssh_is_connected(session->ssh_sess);
+}
+
 API int nc_session_monitor(struct nc_session* session)
 {
 	struct session_list_item *litem = NULL, *litem_aux;

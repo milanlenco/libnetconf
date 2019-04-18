@@ -1,0 +1,16 @@
+.libs/
+.obj/
+Doxyfile
+Makefile
+config.log
+config.status
+dev-tools/lncdatastore/Makefile
+headers/libnetconf.h
+headers/libnetconf_ssh.h
+headers/libnetconf_xml.h
+libnetconf.la
+libnetconf.pc
+libnetconf.spec
+libtool
+models/ietf-netconf-acm-config.rng
+src/config.h
