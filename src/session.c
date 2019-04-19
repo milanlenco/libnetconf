@@ -1379,7 +1379,7 @@ API void nc_session_free(struct nc_session* session)
 		return;
 	}
 
-	if (session->status != NC_SESSION_STATUS_CLOSED) {
+	if (session->status != NC_SESSION_STATUS_CLOSED && ssh_is_connected(session->ssh_sess)) {
 		nc_session_close(session, NC_SESSION_TERM_CLOSED);
 	}
 
