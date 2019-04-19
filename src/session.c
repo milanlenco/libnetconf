@@ -294,9 +294,9 @@ int nc_session_is_monitored(const char* session_id)
 
 int nc_session_is_ssh_connected(struct nc_session* session)
 {
-    if (session == NULL)
-        return 0;
-    return ssh_is_connected(session->ssh_sess);
+	return  session != NULL &&
+		ssh_is_connected(session->ssh_sess) && 
+		!ssh_channel_is_eof(session->ssh_chan);
 }
 
 API int nc_session_monitor(struct nc_session* session)
@@ -1379,7 +1379,9 @@ API void nc_session_free(struct nc_session* session)
 		return;
 	}
 
-	if (session->status != NC_SESSION_STATUS_CLOSED && ssh_is_connected(session->ssh_sess)) {
+	if (session->status != NC_SESSION_STATUS_CLOSED &&
+		ssh_is_connected(session->ssh_sess) && !ssh_channel_is_eof(session->ssh_chan))
+	{
 		nc_session_close(session, NC_SESSION_TERM_CLOSED);
 	}
 
