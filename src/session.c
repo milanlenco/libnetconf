@@ -1522,12 +1522,18 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 
 		if ((status == -1) && (errno == EINTR)) {
 			/* poll was interrupted - try it again */
-			usleep(1000);           // sleep for 1 ms
+			usleep(1000);           // sleep for 1 msec
 			++sleep_count;
-			if (sleep_count < 5000  // total of 5 s ia allowed
+			if (sleep_count < 2) {
+				DBG("nc_session_send: poll was interrupted: status: %d, errno: %d (%s)", status, errno, strerror(errno));
+#ifndef DISABLE_LIBSSH
+				DBG("nc_session_send: SSH channel error: (%zd: %s)", ssh_get_error_code(session->ssh_sess), ssh_get_error(session->ssh_sess));
+#endif
+			}
+			if (sleep_count < 5000  // total of 5 sec is allowed
 #ifndef DISABLE_LIBSSH
 				&& session->ssh_chan && session->ssh_sess
-				&& ssh_get_error_code(session->ssh_sess) != SSH_FATAL
+				&& (ssh_get_error_code(session->ssh_sess) == SSH_EINTR || ssh_get_error_code(session->ssh_sess) == SSH_NO_ERROR)
 #endif
 				)
 				continue;
@@ -1564,10 +1570,16 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 			if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
 				usleep(1000);
 				++sleep_count;
+				if (sleep_count < 2) {
+					DBG("nc_session_send: write was interrupted: status: %d, errno: %d (%s)", ret, errno, strerror(errno));
+#ifndef DISABLE_LIBSSH
+					DBG("nc_session_send: SSH channel error: (%zd: %s)", ssh_get_error_code(session->ssh_sess), ssh_get_error(session->ssh_sess));
+#endif
+				}
 				if (sleep_count < 5000
 #ifndef DISABLE_LIBSSH
 					&& session->ssh_chan && session->ssh_sess
-					&& ssh_get_error_code(session->ssh_sess) != SSH_FATAL
+					&& (ssh_get_error_code(session->ssh_sess) == SSH_EINTR || ssh_get_error_code(session->ssh_sess) == SSH_NO_ERROR)
 #endif
 					)
 					continue;
@@ -1605,12 +1617,18 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 	do {
 		NC_WRITE(session, &(text[c]), c, ret);
 		if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-			usleep(1000);		// sleep for 1 ms
+			usleep(1000);		// sleep for 1 msec
 			++sleep_count;
+			if (sleep_count < 2) {
+				DBG("nc_session_send: write was interrupted: status: %d, errno: %d (%s)", ret, errno, strerror(errno));
+#ifndef DISABLE_LIBSSH
+				DBG("nc_session_send: SSH channel error: (%zd: %s)", ssh_get_error_code(session->ssh_sess), ssh_get_error(session->ssh_sess));
+#endif
+			}
 			if (sleep_count < 5000	// total of 5 sec allowed
 #ifndef DISABLE_LIBSSH
 				&& session->ssh_chan && session->ssh_sess
-				&& ssh_get_error_code(session->ssh_sess) != SSH_FATAL
+				&& (ssh_get_error_code(session->ssh_sess) == SSH_EINTR || ssh_get_error_code(session->ssh_sess) == SSH_NO_ERROR)
 #endif
 				)
 				continue;
@@ -1653,12 +1671,18 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 	do {
 		NC_WRITE(session, &(text[c]), c, ret);
 		if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-			usleep(1000);		// sleep for 1 ms
+			usleep(1000);		// sleep for 1 msec
 			++sleep_count;
-			if (sleep_count < 5000  // total of 5 s allowed
+			if (sleep_count < 2) {
+				DBG("nc_session_send: write was interrupted: status: %d, errno: %d (%s)", ret, errno, strerror(errno));
+#ifndef DISABLE_LIBSSH
+				DBG("nc_session_send: SSH channel error: (%zd: %s)", ssh_get_error_code(session->ssh_sess), ssh_get_error(session->ssh_sess));
+#endif
+			}
+			if (sleep_count < 5000  // total of 5 sec is allowed
 #ifndef DISABLE_LIBSSH
 				&& session->ssh_chan && session->ssh_sess
-				&& ssh_get_error_code(session->ssh_sess) != SSH_FATAL
+				&& (ssh_get_error_code(session->ssh_sess) == SSH_EINTR || ssh_get_error_code(session->ssh_sess) == SSH_NO_ERROR)
 #endif
 				)
 				continue;
@@ -2139,8 +2163,19 @@ static NC_MSG_TYPE nc_session_receive(struct nc_session* session, int timeout, s
 				) {
 			/* poll was interrupted */
 			++sleep_count;
-			usleep(1000);           // sleep for 1 ms
-			if (sleep_count < 5000) // total of 5 s is allowed
+			if (sleep_count < 2) {
+				DBG("nc_session_receive: poll was interrupted: status: %d, errno: %d (%s)", status, errno, strerror(errno));
+#ifndef DISABLE_LIBSSH
+				DBG("nc_session_receive: SSH channel error: (%zd: %s)", ssh_get_error_code(session->ssh_sess), ssh_get_error(session->ssh_sess));
+#endif
+			}
+			usleep(1000);           // sleep for 1 msec
+			if (sleep_count < 5000  // total of 5 sec is allowed
+#ifndef DISABLE_LIBSSH
+				&& session->ssh_chan && session->ssh_sess
+				&& (ssh_get_error_code(session->ssh_sess) == SSH_EINTR || ssh_get_error_code(session->ssh_sess) == SSH_NO_ERROR)
+#endif
+				)
 				continue;
 		} 
 		if (status < 0) {
