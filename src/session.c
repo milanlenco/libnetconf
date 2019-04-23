@@ -1468,6 +1468,7 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 	char buf[1024];
 	struct pollfd fds;
 	int ret;
+        int sleep_count;
 
 	if (session->fd_output == -1 && session->transport_socket == -1
 #ifndef DISABLE_LIBSSH
@@ -1490,6 +1491,7 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 	}
 
 	/* check that we are able to write data */
+        sleep_count = 0;
 	while (1) {
 		fds.fd = -1;
 
@@ -1514,20 +1516,28 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 			nc_session_close(session, NC_SESSION_TERM_DROPPED);
 			return (EXIT_FAILURE);
 		}
-
 		fds.events = POLLOUT;
 		fds.revents = 0;
 		status = poll(&fds, 1, 0);
 
 		if ((status == -1) && (errno == EINTR)) {
 			/* poll was interrupted - try it again */
-			continue;
-		} else if (status < 0) {
+			usleep(1000);           // sleep for 1 ms
+			++sleep_count;
+			if (sleep_count < 5000  // total of 5 s ia allowed
+#ifndef DISABLE_LIBSSH
+				&& session->ssh_chan && session->ssh_sess
+				&& ssh_get_error_code(session->ssh_sess) != SSH_FATAL
+#endif
+				)
+				continue;
+		}
+		if (status < 0) {
 			/* poll failed - something wrong happened */
 			ERROR("Poll on output communication file descriptor failed (%s)", strerror(errno));
 			return (EXIT_FAILURE);
 
-		} else if (status > 0 && ((fds.revents & POLLHUP) || (fds.revents & POLLERR))) {
+		} else if (status > 0 && ((fds.revents & POLLHUP) || (fds.revents & POLLERR) || (fds.revents & POLLNVAL))) {
 			/* close pipe/fd - other side already did it */
 			ERROR("Communication dropped.");
 			nc_session_close(session, NC_SESSION_TERM_DROPPED);
@@ -1547,12 +1557,20 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 	/* if v1.1 send chunk information before message */
 	if (session->version == NETCONFV11) {
 		snprintf (buf, 1024, "\n#%d\n", (int) strlen (text));
+		sleep_count = 0;
 		c = 0;
 		do {
 			NC_WRITE(session, &(buf[c]), c, ret);
 			if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-				usleep(10);
-				continue;
+				usleep(1000);
+				++sleep_count;
+				if (sleep_count < 5000
+#ifndef DISABLE_LIBSSH
+					&& session->ssh_chan && session->ssh_sess
+					&& ssh_get_error_code(session->ssh_sess) != SSH_FATAL
+#endif
+					)
+					continue;
 			}
 #ifndef DISABLE_LIBSSH
 			if (ret == SSH_ERROR) {
@@ -1566,7 +1584,7 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 				} else {
 					emsg = "description not available";
 				}
-				VERB("Writing data into the communication channel failed (%s).", emsg);
+				ERROR("Writing data into the communication channel failed (%s).", emsg);
 				free (text);
 				return (EXIT_FAILURE);
 			}
@@ -1582,12 +1600,20 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 	}
 
 	/* write the message */
+	sleep_count = 0;
 	c = 0;
 	do {
 		NC_WRITE(session, &(text[c]), c, ret);
 		if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-			usleep(10);
-			continue;
+			usleep(1000);		// sleep for 1 ms
+			++sleep_count;
+			if (sleep_count < 5000	// total of 5 sec allowed
+#ifndef DISABLE_LIBSSH
+				&& session->ssh_chan && session->ssh_sess
+				&& ssh_get_error_code(session->ssh_sess) != SSH_FATAL
+#endif
+				)
+				continue;
 		}
 #ifndef DISABLE_LIBSSH
 		if (ret == SSH_ERROR) {
@@ -1601,7 +1627,7 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 			} else {
 				emsg = "description not available";
 			}
-			VERB("Writing data into the communication channel failed (%s).", emsg);
+			ERROR("Writing data into the communication channel failed (%s).", emsg);
 			free (text);
 			return (EXIT_FAILURE);
 		}
@@ -1622,12 +1648,20 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 	} else { /* NETCONFV10 */
 		text = NC_V10_END_MSG;
 	}
+	sleep_count = 0;
 	c = 0;
 	do {
 		NC_WRITE(session, &(text[c]), c, ret);
 		if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-			usleep(10);
-			continue;
+			usleep(1000);		// sleep for 1 ms
+			++sleep_count;
+			if (sleep_count < 5000  // total of 5 s allowed
+#ifndef DISABLE_LIBSSH
+				&& session->ssh_chan && session->ssh_sess
+				&& ssh_get_error_code(session->ssh_sess) != SSH_FATAL
+#endif
+				)
+				continue;
 		}
 #ifndef DISABLE_LIBSSH
 		if (ret == SSH_ERROR) {
@@ -1641,7 +1675,7 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 			} else {
 				emsg = "description not available";
 			}
-			VERB("Writing data into the communication channel failed (%s).", emsg);
+			ERROR("Writing data into the communication channel failed (%s).", emsg);
 			return (EXIT_FAILURE);
 		}
 #endif
@@ -1649,6 +1683,7 @@ static int nc_session_send(struct nc_session* session, struct nc_msg *msg)
 			DBG_UNLOCK("mut_channel");
 			session->mut_channel_flag = 0;
 			pthread_mutex_unlock(session->mut_channel);
+			ERROR("Writing data into the communication channel failed, errno: %d (%s).", errno, strerror(errno));
 			return (EXIT_FAILURE);
 		}
 	} while (c < (ssize_t) strlen (text));
@@ -2034,6 +2069,7 @@ static NC_MSG_TYPE nc_session_receive(struct nc_session* session, int timeout, s
 	unsigned long int revents;
 	NC_MSG_TYPE msgtype;
 	xmlNodePtr root;
+        int sleep_count;
 
 	if (session == NULL || (session->status != NC_SESSION_STATUS_WORKING && session->status != NC_SESSION_STATUS_CLOSING)) {
 		ERROR("Invalid session to receive data.");
@@ -2054,6 +2090,7 @@ static NC_MSG_TYPE nc_session_receive(struct nc_session* session, int timeout, s
 	pthread_mutex_lock(session->mut_channel);
 
 	/* use while for possibility of repeating test */
+        sleep_count = 0;
 	while(1) {
 		revents = 0;
 #ifndef DISABLE_LIBSSH
@@ -2101,8 +2138,12 @@ static NC_MSG_TYPE nc_session_receive(struct nc_session* session, int timeout, s
 #endif
 				) {
 			/* poll was interrupted */
-			continue;
-		} else if (status < 0) {
+			++sleep_count;
+			usleep(1000);           // sleep for 1 ms
+			if (sleep_count < 5000) // total of 5 s is allowed
+				continue;
+		} 
+		if (status < 0) {
 			/* poll failed - something wrong happend, close this socket and wait for another request */
 			DBG_UNLOCK("mut_channel");
 			pthread_mutex_unlock(session->mut_channel);
@@ -2127,12 +2168,11 @@ static NC_MSG_TYPE nc_session_receive(struct nc_session* session, int timeout, s
 				pthread_rwlock_unlock(&(nc_info->lock));
 			}
 			return (NC_MSG_UNKNOWN);
-
 		}
 		/* status > 0 */
 		/* check the status of the socket */
-		/* if nothing to read and POLLHUP (EOF) or POLLERR set */
-		if ((revents & POLLHUP) || (revents & POLLERR)) {
+		/* if nothing to read and POLLHUP (EOF) or POLLERR or POLLNVAL (invalid request - fd not opened) set */
+		if ((revents & POLLHUP) || (revents & POLLERR) || (revents & POLLNVAL)) {
 			/* close client's socket (it's probably already closed by client */
 			DBG_UNLOCK("mut_channel");
 			pthread_mutex_unlock(session->mut_channel);
