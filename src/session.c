@@ -1875,8 +1875,10 @@ static int nc_session_read_until(struct nc_session* session, const char* endtag,
 
 	for (rd = 0;;) {
 		if (limit > 0 && rd > limit) {
-			free(buf);
+			WARN(">>>> recevied == %s", buf);
+			WARN(">>>> limit == %d", limit);
 			WARN("%s: reading limit reached.", __func__);
+			free(buf);
 			return (EXIT_FAILURE);
 		}
 
@@ -2005,6 +2007,7 @@ static int nc_session_read_until(struct nc_session* session, const char* endtag,
 		} else {
 			/* compare with endtag */
 			if (strcmp (endtag, &(buf[rd - strlen (endtag)])) == 0) {
+				WARN(">>>> recevied == %s", buf);
 				/* end tag found */
 				if (len != NULL) {
 					*len = rd;
@@ -2236,6 +2239,7 @@ static NC_MSG_TYPE nc_session_receive(struct nc_session* session, int timeout, s
 	case NETCONFV11:
 		do {
 			if (nc_session_read_until (session, "\n#", 2, NULL, NULL) != 0) {
+				nc_session_read_until (session, "\n#", 200, NULL, NULL);
 				if (total_len > 0) {
 					free (text);
 				}
